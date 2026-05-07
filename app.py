@@ -364,30 +364,47 @@ with tab2:
     uploaded_file = st.file_uploader("drop your csv here", type=["csv"])
 
     if uploaded_file and impr_model:
-        df = pd.read_csv(uploaded_file)
-        if 'text' in df.columns:
-            with st.spinner("running predictions..."):
-                sentiments, confidences = [], []
-                for text in df['text']:
-                    res = models.predict_text(str(text), impr_model, tokenizer)
-                    sentiments.append(res['sentiment'])
-                    confidences.append(f"{res['confidence']:.1%}")
-                df['prediction'] = sentiments
-                df['confidence'] = confidences
+        # ── BULLETPROOF CSV READER ──
+        try:
+            # Try standard UTF-8 first
+            df = pd.read_csv(uploaded_file)
+        except UnicodeDecodeError:
+            # If that fails, go back to the start of the file and try Latin-1
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, encoding='latin1')
+        except Exception as e:
+            st.error(f"Could not read CSV: {e}")
+            df = None
 
-            st.markdown(f"<br><div class='section-label'>{len(df)} rows processed</div>", unsafe_allow_html=True)
+        if df is not None:
+            if 'text' in df.columns:
+                with st.spinner("running predictions..."):
+                    sentiments, confidences = [], []
+                    for text in df['text']:
+                        # Ensure we convert to string to avoid errors with empty/numeric cells
+                        res = models.predict_text(str(text), impr_model, tokenizer)
+                        sentiments.append(res['sentiment'])
+                        confidences.append(f"{res['confidence']:.1%}")
 
-            pos_count = sum(1 for s in sentiments if s == "Positive")
-            neg_count = len(sentiments) - pos_count
-            m1, m2, m3 = st.columns(3)
-            m1.metric("total", len(df))
-            m2.metric("positive", pos_count)
-            m3.metric("negative", neg_count)
+                    df['prediction'] = sentiments
+                    df['confidence'] = confidences
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.error("no 'text' column found in that csv.")
+                st.markdown(f"<br><div class='section-label'>{len(df)} rows processed</div>", unsafe_allow_html=True)
+
+                # Summary Metrics
+                pos_count = sum(1 for s in sentiments if s == "Positive")
+                neg_count = len(sentiments) - pos_count
+
+                m1, m2, m3 = st.columns(3)
+                m1.metric("total", len(df))
+                m2.metric("positive", pos_count)
+                m3.metric("negative", neg_count)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.error("No 'text' column found. Please make sure your CSV has a column header named 'text'.")
+
     elif uploaded_file and not impr_model:
         st.error("models aren't loaded yet — train them first.")
 
