@@ -261,7 +261,7 @@ with st.sidebar:
             with st.spinner("training... grab a coffee ☕"):
                 res = models.train_and_save_models(GLOVE_PATH, DATA_PATH, SAVE_DIR)
                 st.session_state["train_results"] = res
-                st.success("done. reload to use the models.")
+                st.success("done. check results tab.")
 
     st.markdown("<hr style='border-color:#333; margin:1.2rem 0;'>", unsafe_allow_html=True)
 
