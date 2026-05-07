@@ -400,25 +400,49 @@ with tab2:
                 # --- NEW: COMPARISON LOGIC ---
                 m1, m2, m3 = st.columns(3)
 
+                # --- ENHANCED COMPARISON UI ---
                 if 'sentiment' in df.columns:
-                    # Standardize the ground truth column to lowercase strings
+                    # Standardize ground truth
                     df['sentiment'] = df['sentiment'].astype(str).str.lower()
 
                     # Calculate Accuracy
                     correct = (df['prediction'] == df['sentiment']).sum()
                     accuracy = correct / len(df)
 
-                    m1.metric("Batch Accuracy", f"{accuracy:.1%}")
-                    m2.metric("Actual Positive", len(df[df['sentiment'] == 'positive']))
-                    m3.metric("Actual Negative", len(df[df['sentiment'] == 'negative']))
+                    # ROW 1: Accuracy and Totals
+                    st.markdown("### 📊 Performance Summary")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Batch Accuracy", f"{accuracy:.1%}")
+                    c2.metric("Total Samples", len(df))
+                    c3.metric("Correct Predictions", f"{correct} / {len(df)}")
 
-                    st.success(f"Successfully compared predictions against '{len(df)}' ground truth labels.")
+                    # ROW 2: Side-by-Side Comparison
+                    st.markdown("---")
+                    col_actual, col_predicted = st.columns(2)
+
+                    with col_actual:
+                        st.write("**Actual (from CSV)**")
+                        a_pos = len(df[df['sentiment'] == 'positive'])
+                        a_neg = len(df[df['sentiment'] == 'negative'])
+                        st.write(f"✅ Positive: {a_pos}")
+                        st.write(f"❌ Negative: {a_neg}")
+
+                    with col_predicted:
+                        st.write("**Predicted (by Model)**")
+                        p_pos = (df['prediction'] == 'positive').sum()
+                        p_neg = (df['prediction'] == 'negative').sum()
+                        st.write(f"✅ Positive: {p_pos}")
+                        st.write(f"❌ Negative: {p_neg}")
+
+                    st.success("Comparison complete! Check the table below for row-by-row details.")
+
                 else:
-                    # Fallback to simple counts if no ground truth column exists
-                    pos_count = (raw_probs > 0.5).sum()
+                    # Fallback if no sentiment column exists
+                    m1, m2, m3 = st.columns(3)
+                    p_pos = (df['prediction'] == 'positive').sum()
                     m1.metric("Total Rows", len(df))
-                    m2.metric("Predicted Pos", pos_count)
-                    m3.metric("Predicted Neg", len(df) - pos_count)
+                    m2.metric("Predicted Pos", p_pos)
+                    m3.metric("Predicted Neg", len(df) - p_pos)
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.dataframe(df, width='stretch')
