@@ -356,7 +356,7 @@ with tab2:
     st.markdown('<div class="section-label">batch predictions via csv</div>', unsafe_allow_html=True)
     st.markdown("""
     <div class="note-box">
-        your csv needs a column called <code>text</code>. predictions run on the improved model.
+        your csv needs a column called <code>text</code> and a <code>sentiment</code> column to compare between predicted and actual file values. predictions run on the improved model.
     </div>
     """, unsafe_allow_html=True)
 
@@ -377,37 +377,53 @@ with tab2:
             df = None
 
         if df is not None:
+            # Standardize column names to lowercase for easier checking
+            df.columns = [c.lower() for c in df.columns]
+
             if 'text' in df.columns:
                 with st.spinner("Processing batch..."):
-                    # 1. Clean all texts at once
+                    # 1. Vectorized Preprocessing
                     cleaned_texts = [models.spacy_tokenize(str(t)) for t in df['text']]
-
-                    # 2. Tokenize and Pad everything in one go (The "Fast" way)
                     seqs = tokenizer.texts_to_sequences(cleaned_texts)
                     X_batch = pad_sequences(seqs, maxlen=models.MAX_LEN)
 
-                    # 3. One single call to the model for all rows
+                    # 2. Batch Prediction
                     raw_probs = impr_model.predict(X_batch, verbose=0).flatten()
 
-                    # 4. Map results back to the dataframe
-                    df['prediction'] = ["Positive" if p > 0.5 else "Negative" for p in raw_probs]
-                    df['confidence'] = [f"{p if p > 0.5 else 1.0 - p:.1%}" for p in raw_probs]
+                    # 3. Store Results
+                    df['prediction'] = ["positive" if p > 0.5 else "negative" for p in raw_probs]
+                    df['conf_score'] = [p if p > 0.5 else 1.0 - p for p in raw_probs]
+                    df['confidence'] = [f"{c:.1%}" for c in df['conf_score']]
 
                 st.markdown(f"<br><div class='section-label'>{len(df)} rows processed</div>", unsafe_allow_html=True)
 
-                # Summary Metrics
-                pos_count = (raw_probs > 0.5).sum()
-                neg_count = len(raw_probs) - pos_count
-
+                # --- NEW: COMPARISON LOGIC ---
                 m1, m2, m3 = st.columns(3)
-                m1.metric("total", len(df))
-                m2.metric("positive", pos_count)
-                m3.metric("negative", int(neg_count))
+
+                if 'sentiment' in df.columns:
+                    # Standardize the ground truth column to lowercase strings
+                    df['sentiment'] = df['sentiment'].astype(str).str.lower()
+
+                    # Calculate Accuracy
+                    correct = (df['prediction'] == df['sentiment']).sum()
+                    accuracy = correct / len(df)
+
+                    m1.metric("Batch Accuracy", f"{accuracy:.1%}")
+                    m2.metric("Actual Positive", len(df[df['sentiment'] == 'positive']))
+                    m3.metric("Actual Negative", len(df[df['sentiment'] == 'negative']))
+
+                    st.success(f"Successfully compared predictions against '{len(df)}' ground truth labels.")
+                else:
+                    # Fallback to simple counts if no ground truth column exists
+                    pos_count = (raw_probs > 0.5).sum()
+                    m1.metric("Total Rows", len(df))
+                    m2.metric("Predicted Pos", pos_count)
+                    m3.metric("Predicted Neg", len(df) - pos_count)
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.dataframe(df, width='stretch')
             else:
-                st.error("No 'text' column found.")
+                st.error("CSV must have a column named 'text'.")
 
     elif uploaded_file and not impr_model:
         st.error("models aren't loaded yet — train them first.")
