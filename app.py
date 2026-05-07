@@ -164,7 +164,7 @@ st.markdown("""
         color: #f5f0e8 !important;
     }
     [data-testid="stSidebar"] .stButton button {
-        background: #f5f0e8 !important;
+        background: #e8cd33 !important;
         color: #1a1a1a !important;
         font-family: 'DM Mono', monospace !important;
         font-size: 0.85rem !important;
@@ -378,32 +378,36 @@ with tab2:
 
         if df is not None:
             if 'text' in df.columns:
-                with st.spinner("running predictions..."):
-                    sentiments, confidences = [], []
-                    for text in df['text']:
-                        # Ensure we convert to string to avoid errors with empty/numeric cells
-                        res = models.predict_text(str(text), impr_model, tokenizer)
-                        sentiments.append(res['sentiment'])
-                        confidences.append(f"{res['confidence']:.1%}")
+                with st.spinner("Processing batch..."):
+                    # 1. Clean all texts at once
+                    cleaned_texts = [models.spacy_tokenize(str(t)) for t in df['text']]
 
-                    df['prediction'] = sentiments
-                    df['confidence'] = confidences
+                    # 2. Tokenize and Pad everything in one go (The "Fast" way)
+                    seqs = tokenizer.texts_to_sequences(cleaned_texts)
+                    X_batch = pad_sequences(seqs, maxlen=models.MAX_LEN)
+
+                    # 3. One single call to the model for all rows
+                    raw_probs = impr_model.predict(X_batch, verbose=0).flatten()
+
+                    # 4. Map results back to the dataframe
+                    df['prediction'] = ["Positive" if p > 0.5 else "Negative" for p in raw_probs]
+                    df['confidence'] = [f"{p if p > 0.5 else 1.0 - p:.1%}" for p in raw_probs]
 
                 st.markdown(f"<br><div class='section-label'>{len(df)} rows processed</div>", unsafe_allow_html=True)
 
                 # Summary Metrics
-                pos_count = sum(1 for s in sentiments if s == "Positive")
-                neg_count = len(sentiments) - pos_count
+                pos_count = (raw_probs > 0.5).sum()
+                neg_count = len(raw_probs) - pos_count
 
                 m1, m2, m3 = st.columns(3)
                 m1.metric("total", len(df))
                 m2.metric("positive", pos_count)
-                m3.metric("negative", neg_count)
+                m3.metric("negative", int(neg_count))
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, width='stretch')
             else:
-                st.error("No 'text' column found. Please make sure your CSV has a column header named 'text'.")
+                st.error("No 'text' column found.")
 
     elif uploaded_file and not impr_model:
         st.error("models aren't loaded yet — train them first.")
