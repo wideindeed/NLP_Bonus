@@ -243,14 +243,19 @@ orig_model, impr_model, tokenizer = load_saved_artifacts()
 
 # ── Sidebar (Restored to original functionality) ──────────────────────────────
 with st.sidebar:
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
-        <div style='font-family:"DM Mono",monospace; font-size:1.1rem; font-weight:500; margin-bottom:0.2rem;'>
-            sentiment thing
-        </div>
-        <div style='font-family:"DM Sans",sans-serif; font-size:0.8rem; color:#888; margin-bottom:1.5rem;'>
-            CNN + GloVe, two flavours
-        </div>
-    """, unsafe_allow_html=True)
+            <div style='background:#262730; border:1px solid #3d3e47; border-radius:8px; padding:1rem;'>
+                <div style='font-family:"DM Mono",monospace; font-size:0.7rem; color:#e8c84a; text-transform:uppercase; margin-bottom:0.5rem;'>
+                    ⚠️ Model Disclaimer
+                </div>
+                <div style='font-family:"DM Sans",sans-serif; font-size:0.8rem; color:#ccc; line-height:1.4;'>
+                    These models were optimized for <strong>formal IMDB movie reviews</strong>. 
+                    Performance and confidence scores may drop significantly when analyzing 
+                    slang, emojis, or shorthand typically found in <strong>tweets or product reviews</strong>.
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
     if st.button("train both models", use_container_width=True, type="primary"):
         if not os.path.exists(GLOVE_PATH):
