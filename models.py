@@ -21,13 +21,13 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.callbacks import EarlyStopping , ReduceLROnPlateau
 from tensorflow.keras.optimizers import Adam, AdamW
 
-# Load the spacy pipeline
+# Load the spacy pipeline - no more subprocess needed!
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
-    print("Downloading spacy model...")
-    import subprocess
-    subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+    # Fallback just in case
+    import spacy.cli
+    spacy.cli.download("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm")
 
 # ─── Hyper-parameters ────────────────────────────────────────────────────────
@@ -236,41 +236,3 @@ def test_on_new_dataset(orig_model, impr_model, tokenizer):
     }
 
 
-# ─── Cross-Dataset Testing (Yelp Reviews) ────────────────────────────────────
-def test_on_new_dataset(orig_model, impr_model, tokenizer):
-    """
-    Downloads a small Yelp restaurant review dataset to test domain shift.
-    """
-    print("Fetching Yelp dataset for cross-domain testing...")
-
-    try:
-        # Pull 1000 Yelp reviews from a reliable public repo
-        url = "https://raw.githubusercontent.com/javedsha/text-classification/master/yelp_labelled.txt"
-        df = pd.read_csv(url, sep='\t', header=None, names=['Text', 'Label'])
-    except Exception as e:
-        print(f"Download failed, using fallback mock data. Error: {e}")
-        # Bulletproof fallback just in case the URL is blocked by your firewall
-        data = [
-                   ("The food was absolutely wonderful.", 1), ("Crust is not good.", 0),
-                   ("Not tasty and the texture was just nasty.", 0), ("Loved the service!", 1),
-                   ("The fries were great too.", 1), ("The potatoes were like rubber.", 0),
-                   ("Would not recommend this place.", 0), ("Best meal I've ever had.", 1)
-               ] * 25  # Multiply to get 200 rows
-        df = pd.DataFrame(data, columns=['Text', 'Label'])
-
-    print("Tokenizing Yelp reviews with SpaCy...")
-    df['Clean_Text'] = df['Text'].apply(spacy_tokenize)
-
-    # Pad sequences using the IMDB tokenizer (crucial to show vocabulary mismatch)
-    X_test_new = pad_sequences(tokenizer.texts_to_sequences(df['Clean_Text'].tolist()), maxlen=MAX_LEN)
-    y_test_new = df['Label'].values
-
-    print("Evaluating models on Yelp dataset...")
-    _, acc_orig_new = orig_model.evaluate(X_test_new, y_test_new, verbose=0)
-    _, acc_impr_new = impr_model.evaluate(X_test_new, y_test_new, verbose=0)
-
-    return {
-        "yelp_size": len(df),
-        "orig_acc": acc_orig_new,
-        "impr_acc": acc_impr_new
-    }
